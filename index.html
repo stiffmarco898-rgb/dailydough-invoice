@@ -67,7 +67,7 @@
 *Total Estimasi: Rp 46.500*
 
 _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_
-*Catatan Pemesan:* Dibawakan ke kantor saja wkwk`);
+*Catatan Pemesan:* -`);
 
       const getTodayFormatted = () => {
         const today = new Date();
@@ -82,7 +82,7 @@ _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_
       const [invoiceDate, setInvoiceDate] = useState(getTodayFormatted());
       const [customerName, setCustomerName] = useState('Rendy');
       const [poNote, setPoNote] = useState('PO 2-3 Hari terhitung setelah konfirmasi pesanan');
-      const [customerNote, setCustomerNote] = useState('Dibawakan ke kantor saja');
+      const [customerNote, setCustomerNote] = useState('-');
       const [shippingFee, setShippingFee] = useState(0);
       const [discount, setDiscount] = useState(0);
       const [paymentMethod, setPaymentMethod] = useState('Via QRIS');
