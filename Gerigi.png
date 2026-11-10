@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Error><Code>BucketAccountInactive</Code><Message>The account that owns this bucket is not active.</Message><OwnerAccountCanonicalId>61FCC1D29B7754C0BB3330C710477B79642D57B57D3273E4A6CECD7CBEC0610A</OwnerAccountCanonicalId><RequestId>ED605B3C852D948C:A</RequestId><HostId>MlrPKo5gK9N4iKvgELER+8cizd0UvXeYFodYPmMXvQndM+3l89gJgPFizRFDKmj4EjEUwiyg2lH1</HostId><CMReferenceId>MTc5NDI2OTYxNCBSMTA2LVU0Ni5wcm9kOS5wYTMgMTUyMTk4NDYxNTc6MTQ2NTEwNzczOjIw</CMReferenceId></Error>
