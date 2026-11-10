@@ -239,18 +239,41 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
       const handleDownloadJpg = () => {
         setActiveTab('pdf');
         setTimeout(() => {
-          const element = document.getElementById('pdf-invoice-container');
+          // Mengambil elemen kartu invoice utama lengkap dengan border, shadow, dan rounded corners
+          const element = document.getElementById('invoice-card-frame') || document.getElementById('pdf-invoice-container');
           if (!element) return;
 
-          html2canvas(element, {
-            scale: 2, // Kualitas HD/Jernih
+          // Buat pembungkus sementara agar html2canvas merender bingkai invoice secara utuh
+          const clone = element.cloneNode(true);
+          const wrapper = document.createElement('div');
+          wrapper.style.position = 'absolute';
+          wrapper.style.left = '-9999px';
+          wrapper.style.top = '0';
+          wrapper.style.padding = '20px'; // Memberi margin luar cantik
+          wrapper.style.backgroundColor = '#f5f5f4'; // Latar belakang stone-100 kontras
+          wrapper.style.width = '740px'; 
+          wrapper.appendChild(clone);
+          document.body.appendChild(wrapper);
+
+          html2canvas(clone, {
+            scale: 2.5, // Kualitas super jernih HD
             useCORS: true,
-            backgroundColor: '#ffffff'
+            backgroundColor: null,
+            width: 700,
+            windowWidth: 740
           }).then((canvas) => {
             const link = document.createElement('a');
             link.download = `Invoice_${customerName.replace(/\s+/g, '_')}_${invoiceNumber.replace('#', '')}.jpg`;
             link.href = canvas.toDataURL('image/jpeg', 0.95);
             link.click();
+
+            // Hapus elemen sementara setelah unduhan selesai
+            document.body.removeChild(wrapper);
+          }).catch((err) => {
+            console.error(err);
+            if (document.body.contains(wrapper)) {
+              document.body.removeChild(wrapper);
+            }
           });
         }, 300);
       };
@@ -315,41 +338,20 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                   <h2 className="text-base font-semibold text-amber-950 border-b pb-2">2. Edit Detail Invoice</h2>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-stone-600 mb-1">No. Invoice</label>
-                      <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full text-xs p-2 border rounded" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-stone-600 mb-1">Tanggal</label>
-                      <input type="text" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full text-xs p-2 border rounded" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-stone-600 mb-1">Nama Pemesan</label>
-                    <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full text-xs p-2 border rounded font-medium" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-stone-600 mb-1">Estimasi PO</label>
-                      <input type="text" value={poNote} onChange={(e) => setPoNote(e.target.value)} className="w-full text-xs p-2 border rounded" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-stone-600 mb-1">Catatan Tambahan</label>
-                      <input type="text" value={customerNote} onChange={(e) => setCustomerNote(e.target.value)} placeholder="Contoh: -" className="w-full text-xs p-2 border rounded" />
+                      <label className="block text-xs font-medium text-stone-600 mb-1">Nama Pemesan</label>
+                      <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full text-xs p-2 border rounded font-medium" />
                     </div>
                   </div>
 
-                  {/* QRIS Checkbox Toggle */}
-                  <div className="border-t pt-3 flex items-center justify-between">
-                    <label htmlFor="toggle-qris" className="text-xs font-semibold text-stone-700 cursor-pointer">
-                      Tampilkan Barcode QRIS di PDF
-                    </label>
-                    <input
-                      id="toggle-qris"
-                      type="checkbox"
-                      checked={showQris}
-                      onChange={(e) => setShowQris(e.target.checked)}
-                      className="w-4 h-4 text-amber-900 border-stone-300 rounded focus:ring-amber-800 cursor-pointer"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-stone-600 mb-1">Estimasi PO</label>
+                      <input type="text" value={poNote} onChange={(e) => setPoNote(e.target.value)} className="w-full text-xs p-2 border rounded" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-stone-600 mb-1">Catatan Tambahan</label>
+                      <input type="text" value={customerNote} onChange={(e) => setCustomerNote(e.target.value)} placeholder="Contoh: -" className="w-full text-xs p-2 border rounded" />
+                    </div>
                   </div>
 
                   <div>
@@ -410,7 +412,7 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                   </div>
                 )}
 
-                <div className={`bg-white rounded-xl shadow-md border border-stone-200 p-8 max-w-2xl mx-auto ${activeTab !== 'pdf' ? 'hidden print:block' : 'block'}`}>
+                <div id="invoice-card-frame" className={`bg-white rounded-xl shadow-md border border-stone-200 p-8 max-w-2xl mx-auto ${activeTab !== 'pdf' ? 'hidden print:block' : 'block'}`}>
                   <div id="pdf-invoice-container">
                     <div className="flex justify-between items-start border-b-2 border-stone-200 pb-6 mb-6">
                       <div>
@@ -421,10 +423,31 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                           A Little Joy in Every Bite
                         </p>
                       </div>
-                      <div className="text-right">
-                        <span className="bg-amber-900 text-white text-xs font-semibold px-3 py-1 rounded">INVOICE</span>
-                        <p className="text-sm font-semibold mt-2">{invoiceNumber}</p>
-                        <p className="text-xs text-stone-500">{invoiceDate}</p>
+                      <div className="flex flex-col items-end text-right">
+                        <div style={{
+                          display: 'table',
+                          backgroundColor: '#78350f',
+                          color: '#ffffff',
+                          borderRadius: '6px',
+                          padding: '0 12px',
+                          height: '24px',
+                          marginBottom: '6px'
+                        }}>
+                          <span style={{
+                            display: 'table-cell',
+                            verticalAlign: 'middle',
+                            textAlign: 'center',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            letterSpacing: '0.05em',
+                            color: '#ffffff',
+                            lineHeight: '1'
+                          }}>
+                            INVOICE
+                          </span>
+                        </div>
+                        <p className="text-sm font-bold text-stone-800 m-0 leading-snug">{invoiceNumber}</p>
+                        <p className="text-xs text-stone-500 m-0 leading-tight mt-0.5">{invoiceDate}</p>
                       </div>
                     </div>
 
@@ -481,30 +504,6 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                       </div>
                       <p className="text-stone-400 italic">Terima kasih atas pesanan Anda! 🙏✨</p>
                     </div>
-
-                    {/* QRIS Permanent Image Display from GitHub */}
-                    {showQris && (
-                      <div className="mt-6 border-t pt-4 text-center">
-                        <p className="text-xs font-semibold text-stone-700 mb-2">Pindai QRIS untuk Pembayaran:</p>
-                        <img
-                          src="./qris.jpg?v=1"
-                          alt="Barcode QRIS Daily Dough"
-                          onError={(e) => {
-                            if (!e.target.dataset.tried) {
-                              e.target.dataset.tried = "1";
-                              e.target.src = "qris.jpg?v=1";
-                            } else if (e.target.dataset.tried === "1") {
-                              e.target.dataset.tried = "2";
-                              e.target.src = "qris.png";
-                            } else {
-                              e.target.onerror = null;
-                              e.target.src = 'https://placehold.co/200x200/f5f5f4/78350f?text=Foto+QRIS+Tidak+Ditemukan';
-                            }
-                          }}
-                          className="max-w-[200px] max-h-[200px] mx-auto rounded-lg border border-stone-200 shadow-sm object-contain"
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
