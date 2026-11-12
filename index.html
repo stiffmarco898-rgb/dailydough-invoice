@@ -25,9 +25,6 @@
   <!-- Babel Compiler for JSX -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- html2canvas Library for JPG Generation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -66,15 +63,6 @@
     const { useState, useEffect } = React;
 
     function App() {
-      const [rawText, setRawText] = useState(`Halo Daily Dough, saya *Rendy* ingin memesan menu berikut:
-
-1. *Croissant - Smoked Beef & Cheese* (1x) = Rp 20.500
-2. *Salt Bread - Milkymond* (2x) = Rp 26.000
-
-*Total Estimasi: Rp 46.500*
-
-_*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
-
       const getTodayFormatted = () => {
         const today = new Date();
         return today.toLocaleDateString('id-ID', {
@@ -84,7 +72,47 @@ _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
         });
       };
 
-      const [invoiceNumber, setInvoiceNumber] = useState(`#DD-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-001`);
+      const getTodayCode = () => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}${month}${day}`;
+      };
+
+      // State counter nomor invoice
+      const [invoiceCounter, setInvoiceCounter] = useState(() => {
+        const savedCounter = localStorage.getItem('dd_invoice_counter');
+        const savedDate = localStorage.getItem('dd_invoice_date');
+        const todayCode = getTodayCode();
+        
+        if (savedDate === todayCode && savedCounter) {
+          return parseInt(savedCounter, 10);
+        }
+        return 1;
+      });
+
+      // State riwayat transaksi
+      const [orderHistory, setOrderHistory] = useState(() => {
+        const saved = localStorage.getItem('dd_order_history');
+        return saved ? JSON.parse(saved) : [];
+      });
+
+      const generateInvoiceNumber = (counterNum) => {
+        const todayCode = getTodayCode();
+        return `#DD-${todayCode}-${String(counterNum).padStart(3, '0')}`;
+      };
+
+      const [rawText, setRawText] = useState(`Halo Daily Dough, saya *Rendy* ingin memesan menu berikut:
+
+1. *Croissant - Smoked Beef & Cheese* (1x) = Rp 20.500
+2. *Salt Bread - Milkymond* (2x) = Rp 26.000
+
+*Total Estimasi: Rp 46.500*
+
+_*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
+
+      const [invoiceNumber, setInvoiceNumber] = useState(generateInvoiceNumber(invoiceCounter));
       const [invoiceDate, setInvoiceDate] = useState(getTodayFormatted());
       const [customerName, setCustomerName] = useState('Rendy');
       const [poNote, setPoNote] = useState('PO 2-3 Hari terhitung setelah konfirmasi pesanan');
@@ -92,14 +120,38 @@ _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
       const [shippingFee, setShippingFee] = useState(0);
       const [discount, setDiscount] = useState(0);
       const [paymentMethod, setPaymentMethod] = useState('Via QRIS');
-      const [showQris, setShowQris] = useState(true);
       const [items, setItems] = useState([
         { id: '1', name: 'Croissant - Smoked Beef & Cheese', qty: 1, price: 20500 },
         { id: '2', name: 'Salt Bread - Milkymond', qty: 2, price: 13000 }
       ]);
 
       const [copied, setCopied] = useState(false);
+      const [sheetsCopied, setSheetsCopied] = useState(false);
       const [activeTab, setActiveTab] = useState('preview');
+      
+      // State untuk URL Webhook Google Sheets (Default sudah terpasang permanen)
+      const DEFAULT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzaIPFcLhHsVgYEByokk2oRaZmaNrzwROPbAfOLLTlgRM2m4awXAWq2QoyVEJG-N6wt/exec';
+      const [webhookUrl, setWebhookUrl] = useState(() => {
+        return localStorage.getItem('dd_sheets_webhook') || DEFAULT_WEBHOOK_URL;
+      });
+      const [isSyncing, setIsSyncing] = useState(false);
+      const [syncStatus, setSyncStatus] = useState(''); // 'success' | 'error' | ''
+      const [showWebhookConfig, setShowWebhookConfig] = useState(false);
+
+      // Sync webhook URL ke localStorage
+      useEffect(() => {
+        localStorage.setItem('dd_sheets_webhook', webhookUrl);
+      }, [webhookUrl]);
+
+      // Sync counter & riwayat ke localStorage
+      useEffect(() => {
+        localStorage.setItem('dd_invoice_counter', invoiceCounter.toString());
+        localStorage.setItem('dd_invoice_date', getTodayCode());
+      }, [invoiceCounter]);
+
+      useEffect(() => {
+        localStorage.setItem('dd_order_history', JSON.stringify(orderHistory));
+      }, [orderHistory]);
 
       const formatIDR = (amount) => {
         return new Intl.NumberFormat('id-ID', {
@@ -147,7 +199,7 @@ _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
           }
         }
 
-        let custNote = '';
+        let custNote = '-';
         const noteMatch = rawText.match(/\*?Catatan Pemesan:\*?\s*([^\n]+)/i) ||
                           rawText.match(/\*?Catatan:\*?\s*([^\n]+)/i);
         if (noteMatch && noteMatch[1] && !noteMatch[1].toLowerCase().includes('po 2-3 hari')) {
@@ -156,7 +208,7 @@ _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
 
         setCustomerName(name);
         if (newItems.length > 0) setItems(newItems);
-        if (custNote) setCustomerNote(custNote);
+        setCustomerNote(custNote);
       };
 
       const handleAddItem = () => {
@@ -182,6 +234,114 @@ _*(Catatan: PO 2-3 hari terhitung setelah konfirmasi pesanan)*_`);
             return item;
           })
         );
+      };
+
+      // Simpan Pesanan saat ini dan Naikkan Counter Invoice secara Otomatis + Kirim ke Google Sheets
+      const handleSaveAndIncrement = async () => {
+        const itemSummary = items.map(i => `${i.name} (${i.qty}x)`).join(', ');
+        
+        const newRecord = {
+          noInvoice: invoiceNumber,
+          tanggal: invoiceDate,
+          nama: customerName,
+          rincianMenu: itemSummary,
+          subtotal: subtotal,
+          ongkir: Number(shippingFee),
+          diskon: Number(discount),
+          totalBayar: total,
+          metode: paymentMethod,
+          catatan: customerNote
+        };
+
+        // Tambah ke riwayat lokal
+        setOrderHistory(prev => [newRecord, ...prev]);
+
+        // Kirim langsung ke Google Sheets jika URL Webhook sudah diatur
+        if (webhookUrl && webhookUrl.startsWith('https://script.google.com/')) {
+          setIsSyncing(true);
+          setSyncStatus('');
+          try {
+            await fetch(webhookUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(newRecord)
+            });
+            setSyncStatus('success');
+            setTimeout(() => setSyncStatus(''), 4000);
+          } catch (error) {
+            console.error('Gagal mengirim ke Google Sheets:', error);
+            setSyncStatus('error');
+          } finally {
+            setIsSyncing(false);
+          }
+        }
+
+        // Naikkan counter urutan invoice
+        const nextCounter = invoiceCounter + 1;
+        setInvoiceCounter(nextCounter);
+        setInvoiceNumber(generateInvoiceNumber(nextCounter));
+
+        // Reset form ringan
+        setRawText('');
+        setCustomerName('Pelanggan');
+        setCustomerNote('-');
+        setShippingFee(0);
+        setDiscount(0);
+      };
+
+      // Copy data format khusus untuk Paste langsung ke Google Sheets (Tab Delimited)
+      const handleCopyForSheets = () => {
+        if (orderHistory.length === 0) return;
+
+        const headers = ['No Invoice', 'Tanggal', 'Nama Pemesan', 'Rincian Menu', 'Subtotal', 'Ongkir', 'Diskon', 'Total Bayar', 'Metode Pembayaran', 'Catatan'];
+        const rows = orderHistory.map(row => [
+          row.noInvoice,
+          row.tanggal,
+          row.nama,
+          `"${row.rincianMenu.replace(/"/g, '""')}"`,
+          row.subtotal,
+          row.ongkir,
+          row.diskon,
+          row.totalBayar,
+          row.metode,
+          `"${row.catatan.replace(/"/g, '""')}"`
+        ].join('\t'));
+
+        const tsvContent = [headers.join('\t'), ...rows].join('\n');
+        navigator.clipboard.writeText(tsvContent);
+        setSheetsCopied(true);
+        setTimeout(() => setSheetsCopied(false), 2500);
+      };
+
+      // Export CSV File untuk di-import ke Google Sheets / Excel
+      const handleDownloadCSV = () => {
+        if (orderHistory.length === 0) return;
+
+        const headers = ['No Invoice', 'Tanggal', 'Nama Pemesan', 'Rincian Menu', 'Subtotal', 'Ongkir', 'Diskon', 'Total Bayar', 'Metode Pembayaran', 'Catatan'];
+        const rows = orderHistory.map(row => [
+          row.noInvoice,
+          row.tanggal,
+          row.nama,
+          `"${row.rincianMenu.replace(/"/g, '""')}"`,
+          row.subtotal,
+          row.ongkir,
+          row.diskon,
+          row.totalBayar,
+          row.metode,
+          `"${row.catatan.replace(/"/g, '""')}"`
+        ].join(','));
+
+        const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `DailyDough_Rekapan_${getTodayCode()}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       };
 
       const generateWaString = () => {
@@ -233,48 +393,6 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
         }, 150);
       };
 
-      const handleDownloadJpg = () => {
-        setActiveTab('pdf');
-        setTimeout(() => {
-          // Mengambil elemen kartu invoice utama lengkap dengan border, shadow, dan rounded corners
-          const element = document.getElementById('invoice-card-frame') || document.getElementById('pdf-invoice-container');
-          if (!element) return;
-
-          // Buat pembungkus sementara agar html2canvas merender bingkai invoice secara utuh
-          const clone = element.cloneNode(true);
-          const wrapper = document.createElement('div');
-          wrapper.style.position = 'absolute';
-          wrapper.style.left = '-9999px';
-          wrapper.style.top = '0';
-          wrapper.style.padding = '20px'; // Memberi margin luar cantik
-          wrapper.style.backgroundColor = '#f5f5f4'; // Latar belakang stone-100 kontras
-          wrapper.style.width = '740px'; 
-          wrapper.appendChild(clone);
-          document.body.appendChild(wrapper);
-
-          html2canvas(clone, {
-            scale: 2.5, // Kualitas super jernih HD
-            useCORS: true,
-            backgroundColor: null,
-            width: 700,
-            windowWidth: 740
-          }).then((canvas) => {
-            const link = document.createElement('a');
-            link.download = `Invoice_${customerName.replace(/\s+/g, '_')}_${invoiceNumber.replace('#', '')}.jpg`;
-            link.href = canvas.toDataURL('image/jpeg', 0.95);
-            link.click();
-
-            // Hapus elemen sementara setelah unduhan selesai
-            document.body.removeChild(wrapper);
-          }).catch((err) => {
-            console.error(err);
-            if (document.body.contains(wrapper)) {
-              document.body.removeChild(wrapper);
-            }
-          });
-        }, 300);
-      };
-
       return (
         <div>
           {/* Header */}
@@ -296,12 +414,6 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
               </div>
               <div className="flex space-x-2">
                 <button
-                  onClick={handleDownloadJpg}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm cursor-pointer active:scale-95"
-                >
-                  Download JPG
-                </button>
-                <button
                   onClick={handleDownloadPdf}
                   className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm cursor-pointer active:scale-95"
                 >
@@ -318,7 +430,7 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                 <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5">
                   <h2 className="text-base font-semibold text-amber-950 mb-3">1. Paste Chat WhatsApp Pesanan</h2>
                   <textarea
-                    rows="5"
+                    rows="4"
                     value={rawText}
                     onChange={(e) => setRawText(e.target.value)}
                     className="w-full text-xs font-mono p-3 bg-stone-50 border border-stone-200 rounded-lg focus:ring-2 focus:ring-amber-600 outline-none"
@@ -332,8 +444,18 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                 </div>
 
                 <div className="bg-white rounded-xl shadow-sm border border-stone-200 p-5 space-y-4">
-                  <h2 className="text-base font-semibold text-amber-950 border-b pb-2">2. Edit Detail Invoice</h2>
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <h2 className="text-base font-semibold text-amber-950">2. Edit Detail Invoice</h2>
+                    <span className="text-xs font-mono bg-amber-100 text-amber-900 font-bold px-2 py-0.5 rounded">
+                      Auto #{String(invoiceCounter).padStart(3, '0')}
+                    </span>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-stone-600 mb-1">No. Invoice (Otomatis)</label>
+                      <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="w-full text-xs p-2 border rounded font-mono font-bold bg-amber-50/50" />
+                    </div>
                     <div>
                       <label className="block text-xs font-medium text-stone-600 mb-1">Nama Pemesan</label>
                       <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full text-xs p-2 border rounded font-medium" />
@@ -378,7 +500,94 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                       <input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-full text-xs p-2 border rounded" />
                     </div>
                   </div>
+
+                  {/* Action Tombol Selesai & Increment */}
+                  <div className="border-t pt-3 space-y-2">
+                    <button
+                      onClick={handleSaveAndIncrement}
+                      disabled={isSyncing}
+                      className="w-full bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 text-white font-medium py-2.5 px-4 rounded-lg text-xs shadow-sm transition active:scale-95 flex items-center justify-center gap-2"
+                    >
+                      {isSyncing ? '⏳ Mengirim ke Google Sheets...' : '✓ Selesaikan, Kirim ke Sheets & Lanjut (+1)'}
+                    </button>
+                    {syncStatus === 'success' && (
+                      <p className="text-[11px] text-emerald-700 font-medium text-center bg-emerald-50 py-1 rounded border border-emerald-200">
+                        ✅ Data berhasil masuk ke Google Sheets!
+                      </p>
+                    )}
+                    {syncStatus === 'error' && (
+                      <p className="text-[11px] text-red-600 font-medium text-center bg-red-50 py-1 rounded border border-red-200">
+                        ⚠️ Gagal kirim otomatis, data tersimpan di riwayat lokal.
+                      </p>
+                    )}
+                  </div>
                 </div>
+
+                {/* Google Sheets Sync Box */}
+                <div className="bg-amber-50/80 rounded-xl shadow-sm border border-amber-200 p-5 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold text-amber-950 flex items-center gap-1.5">
+                      📊 Integrasi Google Sheets ({orderHistory.length} Pesanan)
+                    </h2>
+                    <button
+                      onClick={() => setShowWebhookConfig(!showWebhookConfig)}
+                      className="text-xs text-amber-800 underline font-medium hover:text-amber-950"
+                    >
+                      {showWebhookConfig ? 'Tutup Pengaturan' : (webhookUrl ? '⚙️ Terhubung' : '⚙️ Atur Link Sheets')}
+                    </button>
+                  </div>
+
+                  {showWebhookConfig && (
+                    <div className="bg-white p-3 rounded-lg border border-amber-200 space-y-2">
+                      <label className="block text-[11px] font-semibold text-stone-700">
+                        URL Web App Google Apps Script:
+                      </label>
+                      <input
+                        type="url"
+                        value={webhookUrl}
+                        onChange={(e) => setWebhookUrl(e.target.value)}
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        className="w-full text-xs p-2 border border-stone-300 rounded focus:ring-2 focus:ring-amber-600 outline-none font-mono"
+                      />
+                      <p className="text-[10px] text-stone-500 leading-relaxed">
+                        Tempel URL Web App dari Google Apps Script di sini agar setiap pesanan otomatis masuk baris baru di Google Sheets.
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-stone-600">
+                    {webhookUrl 
+                      ? '🟢 Mode Auto-Sync Aktif: Pesanan otomatis masuk ke Google Sheets saat tombol Selesaikan ditekan.' 
+                      : 'Klik "Atur Link Sheets" di kanan atas kotak ini untuk menghubungkan langsung ke Spreadsheet kamu.'}
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={handleCopyForSheets}
+                      disabled={orderHistory.length === 0}
+                      className={`flex-1 text-xs py-2 px-3 rounded-lg font-medium transition ${
+                        orderHistory.length === 0
+                          ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                          : sheetsCopied
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-amber-900 text-amber-50 hover:bg-amber-950'
+                      }`}
+                    >
+                      {sheetsCopied ? 'Tersalin!' : 'Salin Manual'}
+                    </button>
+                    <button
+                      onClick={handleDownloadCSV}
+                      disabled={orderHistory.length === 0}
+                      className={`text-xs py-2 px-3 rounded-lg font-medium transition ${
+                        orderHistory.length === 0
+                          ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                          : 'bg-stone-800 text-white hover:bg-stone-900'
+                      }`}
+                    >
+                      Download CSV
+                    </button>
+                  </div>
+                </div>
+
               </div>
 
               {/* Right Column Preview */}
@@ -397,8 +606,8 @@ Mohon kirimkan bukti transfer ke WA ini ya Kak. Terima kasih! 🙏✨`;
                       {copied ? 'Tersalin!' : 'Salin Pesan WA'}
                     </button>
                   ) : (
-                    <button onClick={handleDownloadJpg} className="px-3 py-1.5 rounded text-xs font-medium bg-emerald-600 text-white">
-                      Download Gambar JPG
+                    <button onClick={handleDownloadPdf} className="px-3 py-1.5 rounded text-xs font-medium bg-emerald-600 text-white">
+                      Simpan PDF
                     </button>
                   )}
                 </div>
